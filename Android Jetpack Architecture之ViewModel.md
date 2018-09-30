@@ -1,3 +1,11 @@
+---
+title: Android Jetpack Architecture之ViewModel
+date: 2018-09-26 20:40:11
+categories: "技术栈"
+tags:
+  - Android
+  - Jetpack
+---
 <br>&ensp;&ensp;Jetpack已经出了很久很久了，近几年的GDD几乎每次都会介绍新的组件，说来惭愧，一直没有好好学习，看近年的Google 的很多Demo中其实都有所体现，之前都是大概的了解了一遍。最近决定，好好梳理一遍，既学习其用法，也尝试学习下其设计思想。也是时候该补充一下了。进入正题--ViewModel</br>
 <br>&ensp;&ensp;首先都是看官方的例子，[ViewModel][1]官方的的例子是会和另一个架构库LiveData写在一起，很多的博客也是照官方的例子来说明，开始接触时甚至给了我一种假象：ViewModel都是和LiveData一起使用的。后来阅读才了解，ViewModel和LiveData职责分工还是很明显的，使用LiveData Demo主要使用其observe功能，LiveDate的使用及原理之后再分析，甚至在appcompat-v7:27.1.1中直接单独集成了ViewModel.所以，故为排除干扰，今天不会使用官方的主流Demo用法，先来看ViewModel。</br>
 <br>&ensp;&ensp;Android的UI控制器（Activity和Fragment）从创建到销毁拥有自己完整的生命周期，当系统配置发生改变时（(Configuration changes)），系统就会销毁Activity和与之关联的Fragment然后再次重建<font color=#FFA500>（可通过在AndroidManifast.xml中配置android:configChanges修改某些行为，这里不讨论）</font>,那么存储在当前UI中的临时数据也会被清空，例如，登陆输入框，输入账号或密码后旋转屏幕，视图被重建，输入过的数据也清空了，这无疑是一种不友好的用户体验。对于少量的可序列化数据可以使用onSaveInstanceState()方法保存然后在onCreate()方法中重新恢复，正如所说onSaveInstanceState对于大量的数据缓存有一定的局限性，大量的数据缓存则可以使用[Fragment][2].setRetainInstance(true)来保存数据。ViewModel也是提供了相同的功能，用来存储和管理与UI相关的数据，允许数据在系统配置变化后存活，我们一起看一下这个ViewModel的缓存是怎么实现的呢？</br>
@@ -10,17 +18,15 @@ public class MyViewModel extends ViewModel {
     public String getName(){
     	return name;
     }
-    
     public void setName(String name){
     	this.name = name;
     }
-    
     @Override
     protected void onCleared() {
     	super.onCleared();
     	name = null;
     }
-    }
+}
 ```
 &nbsp;
 ```java
@@ -91,8 +97,282 @@ public class ViewModelActivity extends AppCompatActivity implements View.OnClick
 - ViewModelProvider是干啥的？
 - AndroidViewModelFactory 这命名一看就是应该是工厂模式，工厂创建了什么？
 - provider.get(MyViewModel.class) 这里直接使用的get命名就得到了需要的唯一数据
-- 注释中ViewModelStoreOwner又是什么角色？
+- 注释中ViewModelStoreOwner又是什么角色？  
+先看ViewModel类，没什么说的，就是一个么有任何真正实现的抽象类，只有一个抽象方法onCleared()
 
+```java
+  public abstract class ViewModel {
+      /**
+       * This method will be called when this ViewModel is no longer used and will be destroyed.
+       * <p>
+       * It is useful when ViewModel observes some data and you need to clear this subscription to
+       * prevent a leak of this ViewModel.
+       */
+      @SuppressWarnings("WeakerAccess")
+      protected void onCleared() {
+      }
+  }
+```
+接着看下ViewModelFactory，顾名思义就是制造ViewModel的。  
+AndroidViewModelFactory的继承关系如下:
+>android.arch.lifecycle.ViewModelProvider.Factory
+>>android.arch.lifecycle.ViewModelProvider.NewInstanceFactory
+>>>android.arch.lifecycle.ViewModelProvider.AndroidViewModelFactory
+
+Factory是一个只包含一个create的interface，NewInstanceFactory实现了该方法传入Class<T>会利用ViewModel的默认无参构造器创建一个对应ViewModel的实例，而AndroidViewModelFactory增加了一个属性就是应用的Applicaion,同时重写create方法，查看ViewModel是否有包含Applicaion参数的构造方法从而使用，对应的其实还有一个AndroidViewModel是ViewModel的子类，默认已经实现了带有Application参数的构造方法，需要使用在ViewModel中使用application的直接继承AndroidViewModel就可以，看到这里其实最上面的例子有个不是问题的问题，其实上面的Factory直接使用NewInstanceFactory就可以创建出对应的ViewModel实例了。
+```java
+	/**
+	 * Implementations of {@code Factory} interface are responsible to instantiate ViewModels.
+	 */
+	public interface Factory {
+	    /**
+	     * Creates a new instance of the given {@code Class}.
+	     * <p>
+	     *
+	     * @param modelClass a {@code Class} whose instance is requested
+	     * @param <T>        The type parameter for the ViewModel.
+	     * @return a newly created ViewModel
+	     */
+	    @NonNull
+	    <T extends ViewModel> T create(@NonNull Class<T> modelClass);
+	}
+
+```
+```java
+/**
+ * Simple factory, which calls empty constructor on the give class.
+ */
+public static class NewInstanceFactory implements Factory {
+
+    @SuppressWarnings("ClassNewInstance")
+    @NonNull
+    @Override
+    public <T extends ViewModel> T create(@NonNull Class<T> modelClass) {
+        //noinspection TryWithIdenticalCatches
+        try {
+            return modelClass.newInstance();
+        } catch (InstantiationException e) {
+            throw new RuntimeException("Cannot create an instance of " + modelClass, e);
+        } catch (IllegalAccessException e) {
+            throw new RuntimeException("Cannot create an instance of " + modelClass, e);
+        }
+    }
+}
+```
+```java
+/**
+ * {@link Factory} which may create {@link AndroidViewModel} and
+ * {@link ViewModel}, which have an empty constructor.
+ */
+public static class AndroidViewModelFactory extends ViewModelProvider.NewInstanceFactory {
+
+    private static AndroidViewModelFactory sInstance;
+
+    /**
+     * Retrieve a singleton instance of AndroidViewModelFactory.
+     *
+     * @param application an application to pass in {@link AndroidViewModel}
+     * @return A valid {@link AndroidViewModelFactory}
+     */
+    @NonNull
+    public static AndroidViewModelFactory getInstance(@NonNull Application application) {
+        if (sInstance == null) {
+            sInstance = new AndroidViewModelFactory(application);
+        }
+        return sInstance;
+    }
+
+    private Application mApplication;
+
+    /**
+     * Creates a {@code AndroidViewModelFactory}
+     *
+     * @param application an application to pass in {@link AndroidViewModel}
+     */
+    public AndroidViewModelFactory(@NonNull Application application) {
+        mApplication = application;
+    }
+
+    @NonNull
+    @Override
+    public <T extends ViewModel> T create(@NonNull Class<T> modelClass) {
+        if (AndroidViewModel.class.isAssignableFrom(modelClass)) {
+            //noinspection TryWithIdenticalCatches
+            try {
+                return modelClass.getConstructor(Application.class).newInstance(mApplication);
+            } catch (NoSuchMethodException e) {
+                throw new RuntimeException("Cannot create an instance of " + modelClass, e);
+            } catch (IllegalAccessException e) {
+                throw new RuntimeException("Cannot create an instance of " + modelClass, e);
+            } catch (InstantiationException e) {
+                throw new RuntimeException("Cannot create an instance of " + modelClass, e);
+            } catch (InvocationTargetException e) {
+                throw new RuntimeException("Cannot create an instance of " + modelClass, e);
+            }
+        }
+        return super.create(modelClass);
+    }
+}
+```
+
+之后通过ViewModelStoreOwner和刚刚创建的Factory创建出ViewModelPrivider实例
+```java
+/**
+ * Creates {@code ViewModelProvider}, which will create {@code ViewModels} via the given
+ * {@code Factory} and retain them in a store of the given {@code ViewModelStoreOwner}.
+ *
+ * @param owner   a {@code ViewModelStoreOwner} whose {@link ViewModelStore} will be used to
+ *                retain {@code ViewModels}
+ * @param factory a {@code Factory} which will be used to instantiate
+ *                new {@code ViewModels}
+ */
+public ViewModelProvider(@NonNull ViewModelStoreOwner owner, @NonNull Factory factory) {
+    this(owner.getViewModelStore(), factory);
+}
+
+/**
+ * Creates {@code ViewModelProvider}, which will create {@code ViewModels} via the given
+ * {@code Factory} and retain them in the given {@code store}.
+ *
+ * @param store   {@code ViewModelStore} where ViewModels will be stored.
+ * @param factory factory a {@code Factory} which will be used to instantiate
+ *                new {@code ViewModels}
+ */
+public ViewModelProvider(@NonNull ViewModelStore store, @NonNull Factory factory) {
+    mFactory = factory;
+    this.mViewModelStore = store;
+}
+```
+```java
+/**
+ * A scope that owns {@link ViewModelStore}.
+ * <p>
+ * A responsibility of an implementation of this interface is to retain owned ViewModelStore
+ * during the configuration changes and call {@link ViewModelStore#clear()}, when this scope is
+ * going to be destroyed.
+ */
+@SuppressWarnings("WeakerAccess")
+public interface ViewModelStoreOwner {
+    /**
+     * Returns owned {@link ViewModelStore}
+     *
+     * @return a {@code ViewModelStore}
+     */
+    @NonNull
+    ViewModelStore getViewModelStore();
+}
+```
+ViewModelStoreOwner 也是一个接口是FragmentActivity实现了该接口并实现了其中的getViewModelStore()方法
+```java
+public class FragmentActivity extends BaseFragmentActivityApi16 implements
+        ViewModelStoreOwner...{
+    private ViewModelStore mViewModelStore;
+    @Override
+    protected void onCreate(@Nullable Bundle savedInstanceState) {
+        mFragments.attachHost(null /*parent*/);
+
+        super.onCreate(savedInstanceState);
+
+        NonConfigurationInstances nc =
+                (NonConfigurationInstances) getLastNonConfigurationInstance();
+        if (nc != null) {
+            mViewModelStore = nc.viewModelStore;
+    }
+    /**
+     * Returns the {@link ViewModelStore} associated with this activity
+     *
+     * @return a {@code ViewModelStore}
+     */
+    @NonNull
+    @Override
+    public ViewModelStore getViewModelStore() {
+        if (getApplication() == null) {
+            throw new IllegalStateException("Your activity is not yet attached to the "
+                    + "Application instance. You can't request ViewModel before onCreate call.");
+        }
+        if (mViewModelStore == null) {
+            mViewModelStore = new ViewModelStore();
+        }
+        return mViewModelStore;
+    }
+}
+```
+这个ViewModelStore又是什么呢，其实就是真正利用HashMap存储ViewModel的地方了，看下代码在存储和clear同时会调用ViewModel需要实现的抽象方法onClear()
+```java
+public class ViewModelStore {
+
+    private final HashMap<String, ViewModel> mMap = new HashMap<>();
+
+    final void put(String key, ViewModel viewModel) {
+        ViewModel oldViewModel = mMap.put(key, viewModel);
+        if (oldViewModel != null) {
+            oldViewModel.onCleared();
+        }
+    }
+
+    final ViewModel get(String key) {
+        return mMap.get(key);
+    }
+
+    /**
+     *  Clears internal storage and notifies ViewModels that they are no longer used.
+     */
+    public final void clear() {
+        for (ViewModel vm : mMap.values()) {
+            vm.onCleared();
+        }
+        mMap.clear();
+    }
+}
+```
+这样ViewModelProvider就是有了一个ViewModel的容器，这时去调用ViewModelProvider的get(Class<T>)方法就是去调用mViewModelStore
+的get()方法取出对应的ViewModel所以这里只要持有的ViewModelStore是有缓存的，那么取出的ViewModel就是相同的缓存了。
+```java
+/**
+ * Returns an existing ViewModel or creates a new one in the scope (usually, a fragment or
+ * an activity), associated with this {@code ViewModelProvider}.
+ * <p>
+ * The created ViewModel is associated with the given scope and will be retained
+ * as long as the scope is alive (e.g. if it is an activity, until it is
+ * finished or process is killed).
+ *
+ * @param modelClass The class of the ViewModel to create an instance of it if it is not
+ *                   present.
+ * @param <T>        The type parameter for the ViewModel.
+ * @return A ViewModel that is an instance of the given type {@code T}.
+ */
+@NonNull
+@MainThread
+public <T extends ViewModel> T get(@NonNull Class<T> modelClass) {
+    String canonicalName = modelClass.getCanonicalName();
+    if (canonicalName == null) {
+        throw new IllegalArgumentException("Local and anonymous classes can not be ViewModels");
+    }
+    return get(DEFAULT_KEY + ":" + canonicalName, modelClass);
+}
+
+@NonNull
+@MainThread
+public <T extends ViewModel> T get(@NonNull String key, @NonNull Class<T> modelClass) {
+    ViewModel viewModel = mViewModelStore.get(key);
+
+    if (modelClass.isInstance(viewModel)) {
+        //noinspection unchecked
+        return (T) viewModel;
+    } else {
+        //noinspection StatementWithEmptyBody
+        if (viewModel != null) {
+            // TODO: log a warning.
+        }
+    }
+
+    viewModel = mFactory.create(modelClass);
+    mViewModelStore.put(key, viewModel);
+    //noinspection unchecked
+    return (T) viewModel;
+}
+
+```
 看到这里就会发现ViewModelStore的缓存其实是通过NonConfigurationInstances的缓存来实现的，这样就完成了Activity销毁重建后ViewModel还保存原来的数据的过程，那么NonConfigurationInstances 是什么呢？如果有了解过使用在Activity中使用onRetainNonConfigurationInstance()保存缓存数据，在onCreate()中通过getLastNonConfigurationInstance()恢复之前的数据状态的同学可能会很熟悉这里的写法，是的，这里FragmentActivity就是使用的这种方式来保存之前的ViewModelStore,看下FragmentActivity的onRetainNonConfigurationInstance()方法。
 
 ```java
@@ -287,5 +567,5 @@ private ActivityClientRecord performDestroyActivity(IBinder token, boolean finis
 
 **结语：至此就基本看完了ViewModel在Activity中的使用和原理，在Fragment中的实现主要是使用setRetainInstance(true)的方式去保存，跟今天的分析也有关联，分析源码的过程总是看着就有新的问题，再次带着问题去解决会再次有不同的收获，本文的理解也可能有偏差，如有错误和想要交流的也欢迎指正沟通。**  
 
-[1]: https://developer.android.google.cn/topic/libraries/architecture/viewmodel        "Jetpack-ViewModel" 
+[1]: https://developer.android.google.cn/topic/libraries/architecture/viewmodel        "Jetpack-ViewModel"
 [2]: https://developer.android.com/reference/android/support/v4/app/Fragment           "Fragment-reference"
