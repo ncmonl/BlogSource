@@ -6,12 +6,12 @@ tags:
   - Android
   - Jetpack
 ---
-<br>&ensp;&ensp;Jetpack已经出了很久很久了，近几年的GDD几乎每次都会介绍新的组件，说来惭愧，一直没有好好学习，看近年的Google 的很多Demo中其实都有所体现，之前都是大概的了解了一遍。最近决定，好好梳理一遍，既学习其用法，也尝试学习下其设计思想。也是时候该补充一下了。进入正题--ViewModel</br>
-<br>&ensp;&ensp;首先都是看官方的例子，[ViewModel][1]官方的的例子是会和另一个架构库LiveData写在一起，很多的博客也是照官方的例子来说明，开始接触时甚至给了我一种假象：ViewModel都是和LiveData一起使用的。后来阅读才了解，ViewModel和LiveData职责分工还是很明显的，使用LiveData Demo主要使用其observe功能，LiveDate的使用及原理之后再分析，甚至在appcompat-v7:27.1.1中直接单独集成了ViewModel.所以，故为排除干扰，今天不会使用官方的主流Demo用法，先来看ViewModel。</br>
-<br>&ensp;&ensp;Android的UI控制器（Activity和Fragment）从创建到销毁拥有自己完整的生命周期，当系统配置发生改变时（(Configuration changes)），系统就会销毁Activity和与之关联的Fragment然后再次重建<font color=#FFA500>（可通过在AndroidManifast.xml中配置android:configChanges修改某些行为，这里不讨论）</font>,那么存储在当前UI中的临时数据也会被清空，例如，登陆输入框，输入账号或密码后旋转屏幕，视图被重建，输入过的数据也清空了，这无疑是一种不友好的用户体验。对于少量的可序列化数据可以使用onSaveInstanceState()方法保存然后在onCreate()方法中重新恢复，正如所说onSaveInstanceState对于大量的数据缓存有一定的局限性，大量的数据缓存则可以使用[Fragment][2].setRetainInstance(true)来保存数据。ViewModel也是提供了相同的功能，用来存储和管理与UI相关的数据，允许数据在系统配置变化后存活，我们一起看一下这个ViewModel的缓存是怎么实现的呢？</br>
-
-<br>首先先看下使用方式，先上效果图</br>
-![ViewMode Sample](http://omv6ufghj.bkt.clouddn.com/device-2018-09-27-224647_20180927224809.gif)
+<br>&ensp;&ensp;Jetpack已经出了很久很久了，近几年的GDD几乎每次都会介绍新的组件，说来惭愧，一直没有好好学习，看近年的Google 的很多Demo中其实都有所体现，之前都是大概的了解了一遍。最近决定，好好梳理一遍，既学习其用法，也尝试学习下其设计思想。也是时候该补充一下了。进入正题--ViewModel
+<br>&ensp;&ensp;首先都是看官方的例子，[ViewModel][1]官方的的例子是会和另一个架构库LiveData写在一起，很多的博客也是照官方的例子来说明，开始接触时甚至给了我一种假象：ViewModel都是和LiveData一起使用的。后来阅读才了解，ViewModel和LiveData职责分工还是很明显的，使用LiveData Demo主要使用其observe功能，LiveDate的使用及原理之后再分析，甚至在appcompat-v7:27.1.1中直接单独集成了ViewModel.所以，故为排除干扰，今天不会使用官方的主流Demo用法，先来看ViewModel。
+<br>&ensp;&ensp;Android的UI控制器（Activity和Fragment）从创建到销毁拥有自己完整的生命周期，当系统配置发生改变时（(Configuration changes)），系统就会销毁Activity和与之关联的Fragment然后再次重建<font color=#FFA500>（可通过在AndroidManifast.xml中配置android:configChanges修改某些行为，这里不讨论）</font>,那么存储在当前UI中的临时数据也会被清空，例如，登陆输入框，输入账号或密码后旋转屏幕，视图被重建，输入过的数据也清空了，这无疑是一种不友好的用户体验。对于少量的可序列化数据可以使用onSaveInstanceState()方法保存然后在onCreate()方法中重新恢复，正如所说onSaveInstanceState对于大量的数据缓存有一定的局限性，大量的数据缓存则可以使用[Fragment][2].setRetainInstance(true)来保存数据。ViewModel也是提供了相同的功能，其实和“RetainInstance”也有关联，用来存储和管理与UI相关的数据，允许数据在系统配置变化后存活，我们一起看一下这个ViewModel的缓存是怎么实现的呢？
+<br>**使用方式**  
+首先先看下使用方式，先上效果图
+![ViewMode Sample](http://upload-images.jianshu.io/upload_images/6465799-18811109e93c0a28?imageMogr2/auto-orient/strip)
 ```java
 public class MyViewModel extends ViewModel {
    	String name;
@@ -91,6 +91,7 @@ public class ViewModelActivity extends AppCompatActivity implements View.OnClick
 </android.support.constraint.ConstraintLayout>
 ```
 非常简单的一个例子，这就是ViewModel最简单的使用了，就是TextView中显示ViewModel的数据。ViewModel需要由ViewModelProvider.get(Class<T>)来取得，旋转屏幕销毁后，之前改变的数据还在。  
+**发现的一些疑问**  
 接下来就是进入主题分析下ViewModel到底是怎么实现的呢？  
 带着问题看源码：  
 
@@ -98,6 +99,7 @@ public class ViewModelActivity extends AppCompatActivity implements View.OnClick
 - AndroidViewModelFactory 这命名一看就是应该是工厂模式，工厂创建了什么？
 - provider.get(MyViewModel.class) 这里直接使用的get命名就得到了需要的唯一数据
 - 注释中ViewModelStoreOwner又是什么角色？  
+**源码分析**
 先看ViewModel类，没什么说的，就是一个么有任何真正实现的抽象类，只有一个抽象方法onCleared()
 
 ```java
@@ -569,3 +571,4 @@ private ActivityClientRecord performDestroyActivity(IBinder token, boolean finis
 
 [1]: https://developer.android.google.cn/topic/libraries/architecture/viewmodel        "Jetpack-ViewModel"
 [2]: https://developer.android.com/reference/android/support/v4/app/Fragment           "Fragment-reference"
+
