@@ -12,7 +12,7 @@ date: 2019-03-20 22:35:47
 
 <!--more-->
 
-## 1、获取网页的加载进度
+## 获取网页的加载进度
 
 - void  onProgressChanged(WebView view, int newProgress)  ；
 
@@ -24,7 +24,7 @@ date: 2019-03-20 22:35:47
 
 
 
-## 2、获取网页中的基本信息 
+## 获取网页中的基本信息 
 
 - void  onReceivedIcon(WebView view, Bitmap icon) 
 
@@ -46,7 +46,7 @@ date: 2019-03-20 22:35:47
 
 
 
-## 3、拦截网页中JS控制台消息 
+## 拦截网页中JS控制台消息 
 
 当html中调用console相关输出的时候，就会通过onConsoleMessage进行通知
 
@@ -83,7 +83,7 @@ public class ConsoleMessage {
 }
 ```
 
-## 4、拦截网页中JS弹框
+## 拦截网页中JS弹框
 
 三种类型的弹框
 
@@ -132,7 +132,7 @@ public boolean onJsPrompt(WebView view, String url, String message,
 
   如果是return true，此时我们必须手动调用JsResult的.confirm()或.cancel()方法，因为如果没有调用JsResult的confirm()或cancel()来告诉WebView你的处理结果，则WebView就会认为这个弹出框还一直弹在那里（虽然此时根本没有弹框弹出），所以之后你再点击alert按钮时，将会无效。这一点一定要注意。
 
-## 5、打开和关闭Window
+## 打开和关闭Window
 
 ```java
 public boolean onCreateWindow(WebView view, boolean isDialog,
@@ -202,7 +202,7 @@ public boolean onCreateWindow(WebView webView, boolean isDialog, boolean isUserG
 public void onCloseWindow(WebView window) {}
 ```
 
-## 6、文件选择器
+## 文件选择器
 
 这个方法在项目中很常用，Html中如果需要选择本机文件就需要把文件传过去。基本操作为打开文件管理器再把选择的文件传到网页中。我也有用到，就贴一下完整的代码片段。
 
@@ -277,7 +277,7 @@ public boolean onShowFileChooser(WebView webView, ValueCallback<Uri[]> filePathC
 
 @params fileChooserParams:  描述要打开的文件选择器的模式，以及与之一起使用的选项。
 
-## 7、视频(全屏)播放
+## 视频(全屏)播放
 
 ```java
 public Bitmap getDefaultVideoPoster() {
@@ -311,7 +311,7 @@ public void onHideCustomView() {}
 通知主机应用webview需要显示一个custom view，主要是用在视频全屏 HTML5 Video support。
 
 网页中有H5播放flash video的时候按下全屏按钮将会调用到这个方法，一般用作设置网页播放全屏操作。
-## 8、获取地理位置 
+## 获取地理位置 
 
 ```java
 public void onGeolocationPermissionsShowPrompt(String origin, GeolocationPermissions.Callback callback) {}
@@ -349,7 +349,7 @@ JavaScript中有调用定位的API时会调用本方法
 @param retain 是否保持允许定位状态，传递了true后，本WebView之后都可以获得当前位置信息。
 
 对应的onGeolocationPermissionsHidePrompt（）就是通知应用程序，地理位置权限请求已被取消
-## 9、请求权限
+## 请求权限
 
 ```java
     /**
@@ -397,7 +397,7 @@ public abstract class PermissionRequest {
 @method deny()拒绝了权限
 
 需要的就是PermissRequest中定义的四个常亮代表的权限，关于权限的使用是其他知识点，大家可以看看这个[栗子](https://codeday.me/bug/20181125/420409.html)。
-## 10、其他方法
+##  其他方法
 ```java
 /**
  *获得所有访问历史项目的列表，用于链接着色。
