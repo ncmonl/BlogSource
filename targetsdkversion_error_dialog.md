@@ -18,7 +18,7 @@ date: 2019-12-19 15:36:09
 追踪应用启动代码，忽略过程，本文不是重点，经过层层调用会进入到AppWarnings方法中，直接去看关键信息：
 
 ```java
-//com/android/server/wm/AppWarnings.java
+    //com/android/server/wm/AppWarnings.java
     /**
      * Shows the "deprecated target sdk" warning, if necessary.
      *
@@ -44,16 +44,16 @@ date: 2019-12-19 15:36:09
 继续追踪Build.java
 
 ```java
-//android/os/Build.java
-        /**
-         * The current lowest supported value of app target SDK. Applications targeting
-         * lower values may not function on devices running this SDK version. Its possible
-         * values are defined in {@link Build.VERSION_CODES}.
-         *
-         * @hide
-         */
-        public static final int MIN_SUPPORTED_TARGET_SDK_INT = SystemProperties.getInt(
-                "ro.build.version.min_supported_target_sdk", 0);
+    //android/os/Build.java
+    /**
+     * The current lowest supported value of app target SDK. Applications targeting
+     * lower values may not function on devices running this SDK version. Its possible
+     * values are defined in {@link Build.VERSION_CODES}.
+     *
+     * @hide
+     */
+    public static final int MIN_SUPPORTED_TARGET_SDK_INT = SystemProperties.getInt(
+            "ro.build.version.min_supported_target_sdk", 0);
 ```
 是设备中配置信息ro.build.version.min_supported_target_sdk
 目前发现在Android P 和Android Q中会出现该问题，查看测试机型中该配置的值
@@ -70,7 +70,7 @@ Android P设备中该值：
 答案：不会的，这里有一个小技巧，第一次弹出对话框后，用户如果选择“确定”，AMS会给此应用设置一个Flag标识：FLAG_HIDE_DEPRECATED_SDK。每次准备弹窗时，会先判断此标识值是否为true，如果是，说明已经提示过用户，无需再弹窗。代码如下：
 
 ```java
-public DeprecatedTargetSdkVersionDialog(final AppWarnings manager, Context context, ApplicationInfo appInfo) {
+    public DeprecatedTargetSdkVersionDialog(final AppWarnings manager, Context context, ApplicationInfo appInfo) {
 	// ...
 	final AlertDialog.Builder builder = new AlertDialog.Builder(context)
 	.setPositiveButton(R.string.ok, (dialog, which) ->
@@ -78,7 +78,7 @@ public DeprecatedTargetSdkVersionDialog(final AppWarnings manager, Context conte
 	.setMessage(message)
 	.setTitle(label);
 	// ...
-}
+    }
 ```
 
 ### 问题结论
