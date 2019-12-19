@@ -1,3 +1,10 @@
+---
+title: targetsdkversion-error-dialog
+categories: 技术栈
+tags:
+  - Android
+date: 2019-12-19 15:36:09
+---
 ## 应用弹窗“此应用专为旧版Android打造，因此可能无法正常运行
 
 安装在新设备上的应用出现了这个警告弹窗：
